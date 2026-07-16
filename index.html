@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lita 支給日カレンダー</title>
+<style>
+  :root{
+    --coral:#FF5B5F; --peach:#FFEDE3; --blue:#EAF3FF; --ink:#111; --sub:#555; --line:#EAEEF3;
+    --sun:#E4572E; --sat:#3B7DD8; --panel:#fff;
+  }
+  html,body{margin:0;padding:0;background:transparent;}
+  .cal{
+    font-family:"Meiryo UI","游ゴシック",YuGothic,sans-serif; color:var(--ink);
+    max-width:380px; margin:0 auto; padding:10px 12px 12px;
+    background:var(--panel); border:1px solid var(--line); border-radius:12px;
+  }
+  .cal .hd{display:flex; align-items:baseline; justify-content:space-between; margin-bottom:8px; gap:8px;}
+  .cal .ym{font-size:16px; font-weight:700;}
+  .cal .today-pill{font-size:11px; color:#B23; background:var(--peach);
+    border:1px solid #FFD9C7; border-radius:999px; padding:3px 9px; white-space:nowrap;}
+  .cal table{border-collapse:collapse; width:100%; table-layout:fixed;}
+  .cal th,.cal td{text-align:center; font-size:12px; padding:0;}
+  .cal th{color:var(--sub); font-weight:600; font-size:11px; padding-bottom:4px;}
+  .cal th.wk,.cal td.wk{width:24px; color:#9AA7B2; font-size:10px; font-weight:600;}
+  .cal td{height:42px; vertical-align:top; padding-top:3px;}
+  .cal td .d{display:inline-flex; align-items:center; justify-content:center;
+    width:22px; height:22px; border-radius:50%; line-height:1;}
+  .cal .sun{color:var(--sun);} .cal .sat{color:var(--sat);} .cal .hol{color:var(--sun);}
+  .cal .hol-dot::after{content:""; display:block; width:4px;height:4px;border-radius:50%;
+    background:var(--sun); margin:1px auto 0;}
+  .cal tr.thisweek{background:var(--blue);}
+  .cal tr.thisweek td.wk{color:var(--coral);}
+  .cal td.today .d{background:var(--coral); color:#fff; font-weight:700;}
+  .cal .other{color:#C9D2DC;}
+  .cal .pays{margin-top:1px; display:flex; flex-wrap:wrap; gap:1px; justify-content:center;}
+  .cal .pay{font-size:8.5px; font-weight:700; line-height:1.4; padding:0 3px; border-radius:3px;}
+  .cal .foot{margin-top:8px; border-top:1px dashed var(--line); padding-top:6px;
+    font-size:10px; color:var(--sub); line-height:1.7;}
+  .cal .lg{display:inline-flex; align-items:center; gap:3px; margin-right:8px;}
+  .cal .lg .pay{font-size:9px;}
+  .cal .hols{margin-top:3px;} .cal .hols b{color:var(--sun);}
+  .cal .note{color:#888; font-size:9.5px; margin-top:2px;}
+</style>
+</head>
+<body>
+<div class="cal" id="cal"></div>
+<script>
+(function(){
+  var HOL = {
+    "2026-01-01":"元日","2026-01-12":"成人の日","2026-02-11":"建国記念の日","2026-02-23":"天皇誕生日",
+    "2026-03-20":"春分の日","2026-04-29":"昭和の日","2026-05-03":"憲法記念日","2026-05-04":"みどりの日",
+    "2026-05-05":"こどもの日","2026-05-06":"振替休日","2026-07-20":"海の日","2026-08-11":"山の日",
+    "2026-09-21":"敬老の日","2026-09-23":"秋分の日","2026-10-12":"スポーツの日","2026-11-03":"文化の日",
+    "2026-11-23":"勤労感謝の日",
+    "2027-01-01":"元日","2027-01-11":"成人の日","2027-02-11":"建国記念の日","2027-02-23":"天皇誕生日",
+    "2027-03-21":"春分の日","2027-03-22":"振替休日","2027-04-29":"昭和の日","2027-05-03":"憲法記念日",
+    "2027-05-04":"みどりの日","2027-05-05":"こどもの日","2027-07-19":"海の日","2027-08-11":"山の日",
+    "2027-09-20":"敬老の日","2027-09-23":"秋分の日","2027-10-11":"スポーツの日","2027-11-03":"文化の日",
+    "2027-11-23":"勤労感謝の日"
+  };
+  // 支給日（土日祝は前営業日へ前倒し）。色＝Lita配色。必要なら5/20/30日も追加可。
+  var PAY = [
+    {key:"10", nom:10,   bg:"#EAF3FF", fg:"#2B6CB0"},
+    {key:"15", nom:15,   bg:"#E9F7F2", fg:"#1F7A5A"},
+    {key:"25", nom:25,   bg:"#FFEDE3", fg:"#B4531F"},
+    {key:"末", nom:"eom",bg:"#F5F1FB", fg:"#6B46C1"}
+  ];
+  var WD = ["日","月","火","水","木","金","土"];
+  function key(y,m,d){return y+"-"+String(m+1).padStart(2,"0")+"-"+String(d).padStart(2,"0");}
+  function isOff(y,m,d){var w=new Date(y,m,d).getDay(); return w===0||w===6||!!HOL[key(y,m,d)];}
+  function prevBiz(y,m,d){var g=0; while(isOff(y,m,d)&&g<20){d--;g++; if(d<1){d=1;break;}} return d;}
+
+  var now = new Date();
+  var Y = now.getFullYear(), M = now.getMonth(), TD = now.getDate();
+  var startDow = new Date(Y, M, 1).getDay();
+  var dim = new Date(Y, M+1, 0).getDate();
+  var todayWeekRow = Math.floor((startDow + TD - 1) / 7);
+
+  // 支給日の実日（前営業日調整）を割り当て
+  var payMark = {};
+  PAY.forEach(function(p){
+    var nom = p.nom==="eom" ? dim : p.nom;
+    if(nom > dim) return;
+    var adj = prevBiz(Y,M,nom);
+    (payMark[adj] = payMark[adj] || []).push(p);
+  });
+
+  var html = '<div class="hd"><div class="ym">'+Y+'年'+(M+1)+'月</div>'+
+    '<div class="today-pill">今日 '+(M+1)+'/'+TD+'('+WD[now.getDay()]+') ・ 第'+(todayWeekRow+1)+'週</div></div>';
+  html += '<table><thead><tr><th class="wk">週</th>';
+  for(var i=0;i<7;i++){var c=i===0?'sun':(i===6?'sat':''); html+='<th class="'+c+'">'+WD[i]+'</th>';}
+  html += '</tr></thead><tbody>';
+
+  var day = 1 - startDow, row = 0, monthHols = [];
+  while(day <= dim){
+    html += '<tr class="'+(row===todayWeekRow?'thisweek':'')+'"><td class="wk">第'+(row+1)+'週</td>';
+    for(var c=0;c<7;c++, day++){
+      if(day<1||day>dim){ html+='<td><span class="d other"></span></td>'; continue; }
+      var holName = HOL[key(Y,M,day)];
+      if(holName) monthHols.push(day+'日 '+holName);
+      var dcls=[]; if(c===0)dcls.push('sun'); else if(c===6)dcls.push('sat'); if(holName)dcls.push('hol');
+      var cell = '<span class="d '+dcls.join(' ')+(holName&&day!==TD?' hol-dot':'')+'">'+day+'</span>';
+      if(payMark[day]){
+        cell += '<div class="pays">';
+        payMark[day].forEach(function(p){
+          cell += '<span class="pay" style="background:'+p.bg+';color:'+p.fg+'">'+p.key+'</span>';
+        });
+        cell += '</div>';
+      }
+      html += '<td class="'+(day===TD?'today':'')+'">'+cell+'</td>';
+    }
+    html += '</tr>'; row++;
+  }
+  html += '</tbody></table>';
+
+  // 凡例＋祝日
+  var lg = '<div>支給日 ';
+  PAY.forEach(function(p){ lg += '<span class="lg"><span class="pay" style="background:'+p.bg+';color:'+p.fg+'">'+p.key+'</span></span>'; });
+  lg += '</div><div class="note">※ 支給日が土日祝のときは前営業日に前倒し表示</div>';
+  var hols = monthHols.length ? '<div class="hols"><b>祝</b> '+monthHols.join(' ／ ')+'</div>' : '';
+  html += '<div class="foot">'+lg+hols+'</div>';
+
+  document.getElementById("cal").innerHTML = html;
+})();
+</script>
+</body>
+</html>
